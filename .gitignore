@@ -2,3 +2,7 @@ venv
 *.keras
 models
 images
+*.hdf5
+*.h5
+overview.png
+validation.png
