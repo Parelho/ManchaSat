@@ -13,7 +13,7 @@ def paint_colors(frame, color_mask, color_list, paint_color, margin):
         color_mask[mask > 0] = paint_color
 
 # Load video
-cap = cv2.VideoCapture("video/ManchaSat.mp4")
+cap = cv2.VideoCapture("video/ManchaSat_compressed.mp4")
 if not cap.isOpened():
     raise ValueError("Error opening video file")
 else:
@@ -39,7 +39,8 @@ oil_colors = [
 ]
 
 # Margins
-general_margin = 50
+ship_margin = 50
+sargassum_margin = 20
 oil_margin = 25
 
 # Create output directory
@@ -57,9 +58,9 @@ while True:
     color_mask = np.zeros_like(frame, dtype=np.uint8)
 
     # Paint each category with specific margins
-    paint_colors(frame, color_mask, ship_colors, [0, 0, 255], general_margin)          # red
-    paint_colors(frame, color_mask, sargassum_colors, [128, 128, 128], general_margin) # gray
-    paint_colors(frame, color_mask, oil_colors, [255, 255, 255], oil_margin)           # white
+    paint_colors(frame, color_mask, sargassum_colors, [128, 128, 128], sargassum_margin)    # gray
+    paint_colors(frame, color_mask, ship_colors, [0, 0, 255], ship_margin)                  # red
+    paint_colors(frame, color_mask, oil_colors, [255, 255, 255], oil_margin)                # white
 
     # Save the colored mask
     mask_filename = os.path.join(output_dir, f"mask_{frame_count:04d}.png")
