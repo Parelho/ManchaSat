@@ -4,11 +4,17 @@ import os
 import shutil
 
 # Helper function to paint colors with a specific margin
-def paint_colors(frame, color_mask, color_list, paint_color, margin):
+def paint_colors(frame, color_mask, color_list, paint_color, margin, type):
     for color in color_list:
         bgr = color[::-1]  # convert RGB to BGR
-        lower = np.clip(bgr - margin, 0, 255)
-        upper = np.clip(bgr + margin, 0, 255)
+        match type:
+            case "ship":
+                upper = np.clip(bgr + margin, 0, 255)
+                lower = np.clip(bgr - int(margin * 1.5), 0, 255)
+            case _:
+                upper = np.clip(bgr + margin, 0, 255)
+                lower = np.clip(bgr - margin, 0, 255)
+
         mask = cv2.inRange(frame, lower, upper)
         color_mask[mask > 0] = paint_color
 
@@ -40,8 +46,8 @@ oil_colors = [
 
 # Margins
 ship_margin = 50
-sargassum_margin = 20
-oil_margin = 25
+sargassum_margin = 50
+oil_margin = 40
 
 # Create output directory
 output_dir = "mask_frames"
@@ -58,9 +64,9 @@ while True:
     color_mask = np.zeros_like(frame, dtype=np.uint8)
 
     # Paint each category with specific margins
-    paint_colors(frame, color_mask, sargassum_colors, [128, 128, 128], sargassum_margin)    # gray
-    paint_colors(frame, color_mask, ship_colors, [0, 0, 255], ship_margin)                  # red
-    paint_colors(frame, color_mask, oil_colors, [255, 255, 255], oil_margin)                # white
+    # paint_colors(frame, color_mask, sargassum_colors, [128, 128, 128], sargassum_margin, "sargassum")    # gray
+    paint_colors(frame, color_mask, ship_colors, [0, 0, 255], ship_margin, "ship")                  # red
+    paint_colors(frame, color_mask, oil_colors, [255, 255, 255], oil_margin, "oil")                # white
 
     # Save the colored mask
     mask_filename = os.path.join(output_dir, f"mask_{frame_count:04d}.png")
