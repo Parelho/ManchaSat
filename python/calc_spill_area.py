@@ -10,7 +10,7 @@ model = tf.keras.models.load_model("jupyter/segmentation_unet.h5", compile=False
 
 # ---------- IMAGE AREA ----------
 
-img_path = "grayscale_frames/frame_0900.png"
+img_path = "grayscale_frames/frame_1200.png"
 frame = cv2.imread(img_path)
 if frame is None:
     raise FileNotFoundError(f"Image not found: {img_path}")
@@ -30,8 +30,8 @@ fov_horizontal = 65
 fov_vertical = 48
 
 horizontal_resolution, vertical_resolution = rs.get_resolution(distance, fov_horizontal, fov_vertical)
-horizontal_resolution = horizontal_resolution / 2560 # km/px
-vertical_resolution = vertical_resolution / 1920 # km/px
+horizontal_resolution = horizontal_resolution / 256 # km/px
+vertical_resolution = vertical_resolution / 256 # km/px
 
 print(f"horizontal resolution: {horizontal_resolution:.2f} km/px\nvertical resolution: {vertical_resolution:.2f} km/px")
 
@@ -39,4 +39,4 @@ pixel_area = horizontal_resolution * vertical_resolution # km^2 per pixel
 
 spill_area = oil_pixels * pixel_area # km^2 of oil spill
 
-print(f"Oil spill area: {spill_area:.2f} km^2")
+print(f"Oil spill area: {spill_area:.2f} km^2 ({percentage*100:.2f}%)")
