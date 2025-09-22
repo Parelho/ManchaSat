@@ -1,5 +1,6 @@
 import pyais
 import random
+import math
 
 class AIS:
     def __init__(self) -> None:
@@ -20,7 +21,10 @@ class AIS:
     def decode(nmea):
         return pyais.decode(nmea)
     
-    def simulate_ais():
+    def simulate_ais(custom_coords = False, horizontal_res = 2.14, vertical_res = 1.5, center = [0, 0], image_size = (512, 512), pixel_coord = None):
+        '''
+        center[longitude, latitude]
+        '''
         # bits 0-5 Message ID, which can be 1,2,3
         message_id = random.randint(1,3)
 
@@ -58,11 +62,57 @@ class AIS:
         # bit 60 Position accuracy 1 <= 10m;0 > 10m
         position_accuracy = random.randint(0,1)
 
+        # ---------- COORDS ----------
         # bits 61-88 Longitude
-        longitude = random.uniform(-180, 180)
-
+        longitude = 0
         # bits 89-115 Latitude
-        latitude = random.uniform(-90, 90)
+        latitude = 0
+        
+        lon_center, lat_center = center
+        if pixel_coord is not None:
+            px, py = pixel_coord
+
+            # offset from center in pixels
+            dx_px = px - image_size[0] / 2
+            dy_px = py - image_size[1] / 2
+
+            # convert pixels to km
+            dx_km = dx_px * horizontal_res
+            dy_km = dy_px * vertical_res
+
+            # convert km to degrees
+            km_per_deg_lat = 110.574
+            km_per_deg_lon = 111.320 * math.cos(math.radians(lat_center))
+
+            delta_lon = dx_km / km_per_deg_lon
+            delta_lat = -dy_km / km_per_deg_lat  # minus because image y increases downward
+
+            longitude = lon_center + delta_lon
+            latitude = lat_center + delta_lat
+
+        elif not custom_coords:
+            longitude = random.uniform(-180, 180)
+
+            latitude = random.uniform(-90, 90)
+        else:
+            total_width_km = horizontal_res * 512
+            total_height_km = vertical_res * 512
+
+            # Convert km to degrees
+            km_per_deg_lat = 110.574
+            km_per_deg_lon = 111.320 * math.cos(math.radians(lat_center))
+
+            delta_lat = (total_height_km / 2) / km_per_deg_lat
+            delta_lon = (total_width_km / 2) / km_per_deg_lon
+
+            min_lat = lat_center - delta_lat
+            max_lat = lat_center + delta_lat
+            min_lon = lon_center - delta_lon
+            max_lon = lon_center + delta_lon
+
+            latitude = random.uniform(min_lat, max_lat)
+            longitude = random.uniform(min_lon, max_lon)
+        # ----------------------------------------
 
         # bits 116-127 COG (course over ground in 1/10)
         cog = random.randint(0, 3600)

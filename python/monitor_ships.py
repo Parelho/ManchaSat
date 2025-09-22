@@ -21,15 +21,35 @@ pred_mask = ip.decode_mask(pred, frame.shape)
 
 centers, bboxes, cleaned_mask = ip.detect_ship_centers_from_mask(pred_mask, frame.shape)
 
-# draw centers on the frame (for quick visual check)
-for (cx, cy) in centers:
-    cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+# for (cx, cy) in centers:
+#     cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
 
 # cv2.imshow("Ships", frame)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
     
-print(centers)
+# print(centers)
+
+# ---------- OIL SPILL CENTER ----------
+num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+    (pred_mask == 3).astype(np.uint8), connectivity=8
+)
+
+# Skip label 0 (background)
+oil_centers = []
+for i in range(1, num_labels):
+    cx, cy = centroids[i]  # (x, y) center of mass
+    oil_centers.append((int(cx), int(cy)))
+
+# print(f"Detected {len(oil_centers)} oils")
+# print("Centers:", oil_centers)
+
+# for (cx, cy) in oil_centers:
+#     cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+
+# cv2.imshow("Oil", frame)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
 
 # ---------- AIS ----------
 
@@ -39,7 +59,45 @@ print(centers)
 #     print(f"Longitude: {msg.lon}\nLatitude: {msg.lat}")
 
 # for _ in range(10):
-#     nmea = AIS.simulate_ais()
+#     nmea = AIS.simulate_ais(custom_coords=True)
 #     if AIS.checksum(nmea[0]):
 #         msg = AIS.decode(nmea[0])
 #         print(f"Longitude: {msg.lon}\nLatitude: {msg.lat}")
+
+ships = []
+
+for (cx, cy) in centers:
+    nmea = AIS.simulate_ais(custom_coords=True, pixel_coord=(cx, cy))
+    if AIS.checksum(nmea[0]):
+        msg = AIS.decode(nmea[0])
+        # print(f"Ship at pixel ({cx},{cy}) -> Lon: {msg.lon:.6f}, Lat: {msg.lat:.6f}")
+
+        ships.append({
+            "id": msg.mmsi,
+            "lon": msg.lon,
+            "lat": msg.lat,
+            "lon_px": cx,
+            "lat_px": cy
+        })
+
+closest_ship = {
+    "ship_id": -9999,
+    "difference": 0
+}
+
+for ship in ships:
+    lon = ship["lon_px"]
+    lat = ship["lat_px"]
+
+    difference = abs(abs(oil_centers[0][0] - lon) - abs(oil_centers[0][1] - lat))
+
+    if closest_ship["ship_id"] == -9999:
+        closest_ship["ship_id"] = ship["id"]
+        closest_ship["difference"] = difference
+
+    elif closest_ship["difference"] > difference:
+        closest_ship["ship_id"] = ship["id"]
+        closest_ship["difference"] = difference
+
+ship = next(s for s in ships if s["id"] == closest_ship["ship_id"])
+print(f"Closest ship to oil -> Lon: {ship['lon']:.6f}, Lat: {ship['lat']:.6f}\nOil was spilled by ship with mmsi: {ship['id']}")
