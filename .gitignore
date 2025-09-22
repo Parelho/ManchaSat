@@ -12,4 +12,4 @@ mask_frames
 grayscale_frames
 .env
 libdevice.10.bc
-__pycache__
+python/__pycache__

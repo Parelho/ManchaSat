@@ -19,18 +19,27 @@ input_tensor = ip.preprocess_frame(frame)
 pred = model.predict(input_tensor, verbose=0)
 pred_mask = ip.decode_mask(pred, frame.shape)
 
+centers, bboxes, cleaned_mask = ip.detect_ship_centers_from_mask(pred_mask, frame.shape)
+
+# draw centers on the frame (for quick visual check)
+for (cx, cy) in centers:
+    cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+
+# cv2.imshow("Ships", frame)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+    
+print(centers)
+
 # ---------- AIS ----------
 
-# checksum
 # nmea = "!AIVDM,1,1,,A,14eG;o@034o8sd<L9i:a;WF>062D,0*7D"
-
 # if AIS.checksum(nmea):
 #     msg = AIS.decode(nmea)
-
 #     print(f"Longitude: {msg.lon}\nLatitude: {msg.lat}")
 
-for _ in range(10):
-    nmea = AIS.simulate_ais()
-    if AIS.checksum(nmea[0]):
-        msg = AIS.decode(nmea[0])
-        print(f"Longitude: {msg.lon}\nLatitude: {msg.lat}")
+# for _ in range(10):
+#     nmea = AIS.simulate_ais()
+#     if AIS.checksum(nmea[0]):
+#         msg = AIS.decode(nmea[0])
+#         print(f"Longitude: {msg.lon}\nLatitude: {msg.lat}")
