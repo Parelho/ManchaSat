@@ -81,8 +81,8 @@ for (cx, cy) in centers:
         })
 
 closest_ship = {
-    "ship_id": -9999,
-    "difference": 0
+    "ship_id": 0,
+    "difference": abs(abs(oil_centers[0][0] - ships[0]["lon_px"]) - abs(oil_centers[0][1] - ships[0]["lat_px"]))
 }
 
 for ship in ships:
@@ -91,13 +91,9 @@ for ship in ships:
 
     difference = abs(abs(oil_centers[0][0] - lon) - abs(oil_centers[0][1] - lat))
 
-    if closest_ship["ship_id"] == -9999:
-        closest_ship["ship_id"] = ship["id"]
-        closest_ship["difference"] = difference
-
-    elif closest_ship["difference"] > difference:
+    if closest_ship["difference"] > difference:
         closest_ship["ship_id"] = ship["id"]
         closest_ship["difference"] = difference
 
 ship = next(s for s in ships if s["id"] == closest_ship["ship_id"])
-print(f"Closest ship to oil -> Lon: {ship['lon']:.6f}, Lat: {ship['lat']:.6f}\nOil was spilled by ship with mmsi: {ship['id']}")
+print(f"Closest ship to oil -> Lon: {ship['lon_px']:.6f}, Lat: {ship['lat_px']:.6f}\nOil was spilled by ship with mmsi: {ship['id']}")
