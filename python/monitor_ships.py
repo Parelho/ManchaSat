@@ -5,95 +5,88 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3" # remove tensorflow warnings
 import tensorflow as tf
 from image_processing import ImageProcessing as ip
 from ais import AIS
+import glob
 
 model = tf.keras.models.load_model("jupyter/segmentation_unet.h5", compile=False)
 
-# ---------- IMAGE ----------
+# ---------- GLOBAL PREVIOUS SPILL MASK ----------
+prev_oil_mask = None  # store mask of previous frame
 
-img_path = "grayscale_frames/frame_1200.png"
-frame = cv2.imread(img_path)
-if frame is None:
-    raise FileNotFoundError(f"Image not found: {img_path}")
+def get_new_spill_mask(pred_mask):
+    global prev_oil_mask
+    current_mask = (pred_mask == 3).astype(np.uint8)
 
-input_tensor = ip.preprocess_frame(frame)
-pred = model.predict(input_tensor, verbose=0)
-pred_mask = ip.decode_mask(pred, frame.shape)
+    if prev_oil_mask is None:
+        new_spill = current_mask
+    else:
+        new_spill = np.logical_and(current_mask, prev_oil_mask == 0).astype(np.uint8)
 
-centers, bboxes, cleaned_mask = ip.detect_ship_centers_from_mask(pred_mask, frame.shape)
+    prev_oil_mask = current_mask.copy()
+    return new_spill
 
-# for (cx, cy) in centers:
-#     cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+def get_closest_ship(image):
+    # ---------- IMAGE ----------
+    img_path = image
+    frame = cv2.imread(img_path)
+    if frame is None:
+        raise FileNotFoundError(f"Image not found: {img_path}")
 
-# cv2.imshow("Ships", frame)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-    
-# print(centers)
+    input_tensor = ip.preprocess_frame(frame)
+    pred = model.predict(input_tensor, verbose=0)
+    pred_mask = ip.decode_mask(pred, frame.shape)
 
-# ---------- OIL SPILL CENTER ----------
-num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-    (pred_mask == 3).astype(np.uint8), connectivity=8
-)
+    centers, bboxes, cleaned_mask = ip.detect_ship_centers_from_mask(pred_mask, frame.shape)
 
-# Skip label 0 (background)
-oil_centers = []
-for i in range(1, num_labels):
-    cx, cy = centroids[i]  # (x, y) center of mass
-    oil_centers.append((int(cx), int(cy)))
+    # ---------- NEW OIL SPILL REGION ----------
+    new_spill_mask = get_new_spill_mask(pred_mask)
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(new_spill_mask, connectivity=8)
 
-# print(f"Detected {len(oil_centers)} oils")
-# print("Centers:", oil_centers)
+    oil_centers = [(int(cx), int(cy)) for cx, cy in centroids[1:]]
 
-# for (cx, cy) in oil_centers:
-#     cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+    if oil_centers:
+        ships = []
+        for (cx, cy) in centers:
+            nmea = AIS.simulate_ais(custom_coords=True, pixel_coord=(cx, cy))
+            if AIS.checksum(nmea[0]):
+                msg = AIS.decode(nmea[0])
+                ships.append({
+                    "mmsi": msg.mmsi,
+                    "lon": msg.lon,
+                    "lat": msg.lat,
+                    "lon_px": cx,
+                    "lat_px": cy
+                })
 
-# cv2.imshow("Oil", frame)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
+        closest_ship = None
+        if ships:
+            closest_ship = ships[0]
+            min_diff = abs(oil_centers[0][0] - ships[0]["lon_px"]) + abs(oil_centers[0][1] - ships[0]["lat_px"])
 
-# ---------- AIS ----------
+            for ship in ships[1:]:
+                diff = abs(oil_centers[0][0] - ship["lon_px"]) + abs(oil_centers[0][1] - ship["lat_px"])
+                if diff < min_diff:
+                    closest_ship = ship
+                    min_diff = diff
 
-# nmea = "!AIVDM,1,1,,A,14eG;o@034o8sd<L9i:a;WF>062D,0*7D"
-# if AIS.checksum(nmea):
-#     msg = AIS.decode(nmea)
-#     print(f"Longitude: {msg.lon}\nLatitude: {msg.lat}")
+        return closest_ship
+    else:
+        return None
 
-# for _ in range(10):
-#     nmea = AIS.simulate_ais(custom_coords=True)
-#     if AIS.checksum(nmea[0]):
-#         msg = AIS.decode(nmea[0])
-#         print(f"Longitude: {msg.lon}\nLatitude: {msg.lat}")
+# ---------- MAIN LOOP ----------
+images_dir = "grayscale_frames"
+ships_near_oil = []
 
-ships = []
+for file_path in sorted(glob.glob(os.path.join(images_dir, "*.png"))):
+    closest_ship = get_closest_ship(file_path)
 
-for (cx, cy) in centers:
-    nmea = AIS.simulate_ais(custom_coords=True, pixel_coord=(cx, cy))
-    if AIS.checksum(nmea[0]):
-        msg = AIS.decode(nmea[0])
-        # print(f"Ship at pixel ({cx},{cy}) -> Lon: {msg.lon:.6f}, Lat: {msg.lat:.6f}")
+    if closest_ship is not None:
+        existing_ship = next((ship for ship in ships_near_oil if ship["mmsi"] == closest_ship["mmsi"]), None)
+        if existing_ship is None:
+            closest_ship["proximity_count"] = 1
+            ships_near_oil.append(closest_ship)
+            print(f"New ship near oil: {closest_ship}")
+        else:
+            existing_ship["proximity_count"] += 1
+            print(f"Ship {closest_ship['mmsi']} has the highest proximity count at: {existing_ship['proximity_count']}")
 
-        ships.append({
-            "id": msg.mmsi,
-            "lon": msg.lon,
-            "lat": msg.lat,
-            "lon_px": cx,
-            "lat_px": cy
-        })
-
-closest_ship = {
-    "ship_id": 0,
-    "difference": abs(abs(oil_centers[0][0] - ships[0]["lon_px"]) - abs(oil_centers[0][1] - ships[0]["lat_px"]))
-}
-
-for ship in ships:
-    lon = ship["lon_px"]
-    lat = ship["lat_px"]
-
-    difference = abs(abs(oil_centers[0][0] - lon) - abs(oil_centers[0][1] - lat))
-
-    if closest_ship["difference"] > difference:
-        closest_ship["ship_id"] = ship["id"]
-        closest_ship["difference"] = difference
-
-ship = next(s for s in ships if s["id"] == closest_ship["ship_id"])
-print(f"Closest ship to oil -> Lon: {ship['lon_px']:.6f}, Lat: {ship['lat_px']:.6f}\nOil was spilled by ship with mmsi: {ship['id']}")
+print(ships_near_oil)

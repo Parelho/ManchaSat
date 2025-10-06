@@ -3,9 +3,30 @@ import random
 import math
 
 class AIS:
+    tracked_ships = {}  # MMSI -> last known pixel coordinates
+    distance_threshold = 20  # pixels
+
     def __init__(self) -> None:
         pass
+    
+    @staticmethod
+    def get_mmsi_for_ship(px, py):
+        for mmsi, (last_x, last_y) in AIS.tracked_ships.items():
+            distance = ((px - last_x)**2 + (py - last_y)**2)**0.5
+            if distance < AIS.distance_threshold:
+                AIS.tracked_ships[mmsi] = (px, py)
+                return mmsi
 
+        # New ship: assign a random 30-bit MMSI
+        while True:
+            mmsi = random.randint(0, 0x3fffffff)
+            if mmsi not in AIS.tracked_ships:
+                break
+
+        AIS.tracked_ships[mmsi] = (px, py)
+        return mmsi
+
+    @staticmethod
     def checksum(nmea):
         data, given_checksum = nmea.strip().split('*')
         given_checksum = int(given_checksum, 16)
@@ -18,9 +39,11 @@ class AIS:
         
         return False
     
+    @staticmethod
     def decode(nmea):
         return pyais.decode(nmea)
     
+    @staticmethod
     def simulate_ais(custom_coords = False, horizontal_res = 2.14, vertical_res = 1.5, center = [0, 0], image_size = (512, 512), pixel_coord = None):
         '''
         center[longitude, latitude]
@@ -32,7 +55,12 @@ class AIS:
         repeat_indicator = 0
 
         # bits 8-37 User ID
-        mmsi = random.randint(0, 0x3fffffff) # 0x3fffffff is the highest 30 bit number
+        if pixel_coord is not None:
+            px, py = pixel_coord
+            mmsi = AIS.get_mmsi_for_ship(px, py)
+        else:
+            mmsi = random.randint(0, 0x3fffffff) # 0x3fffffff is the highest 30 bit number
+
 
         # bits 38-41 Navigational status
         # 0  under way using engine
