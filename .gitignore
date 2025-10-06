@@ -13,3 +13,4 @@ grayscale_frames
 .env
 libdevice.10.bc
 python/__pycache__
+*.jpg
