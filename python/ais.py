@@ -1,6 +1,7 @@
 import pyais
 import random
 import math
+from resolution import Resolution as rs
 
 class AIS:
     tracked_ships = {}  # MMSI -> last known pixel coordinates
@@ -123,8 +124,8 @@ class AIS:
 
             latitude = random.uniform(-90, 90)
         else:
-            total_width_km = horizontal_res * 512
-            total_height_km = vertical_res * 512
+            total_width_km = horizontal_res * 256
+            total_height_km = vertical_res * 256
 
             # Convert km to degrees
             km_per_deg_lat = 110.574
@@ -167,3 +168,36 @@ class AIS:
         }
 
         return pyais.encode_dict(msg)
+    
+    def check_coordinates(ship, center_coords, image_size):
+        distance = 430 # in km
+        fov_horizontal = 65
+        fov_vertical = 48
+
+        horizontal_resolution, vertical_resolution = rs.get_resolution(distance, fov_horizontal, fov_vertical)
+        horizontal_resolution = horizontal_resolution / 256 # km/px
+        vertical_resolution = vertical_resolution / 256 # km/px
+
+        lat_ais = ship["lat"]
+        lon_ais = ship["lon"]
+        lon_center, lat_center = center_coords
+        # offset from center in pixels
+        dx_px = ship["lon_px"] - image_size[0] / 2
+        dy_px = ship["lat_px"] - image_size[1] / 2
+
+        # convert pixels to km
+        dx_km = dx_px * horizontal_resolution
+        dy_km = dy_px * vertical_resolution
+        # convert km to degrees
+        km_per_deg_lat = 110.574
+        km_per_deg_lon = 111.320 * math.cos(math.radians(lat_center))
+        delta_lon = dx_km / km_per_deg_lon
+        delta_lat = -dy_km / km_per_deg_lat  # minus because image y increases downward
+
+        lon_camera = lon_center + delta_lon
+        lat_camera = lat_center + delta_lat
+
+        if (lon_camera * 1.1 >= lon_ais and lon_camera * 0.9 <= lon_ais) and (lat_camera * 1.1 >= lat_ais and lat_camera * 0.9 <= lat_ais):
+            return [lon_camera, lat_camera]
+        
+        return None

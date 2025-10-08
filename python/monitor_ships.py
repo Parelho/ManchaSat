@@ -76,6 +76,11 @@ def get_closest_ship(image, ships_near_oil):
                     "lon_px": cx,
                     "lat_px": cy
                 }
+                coords_check = AIS.check_coordinates(ship, [0,0], [256,256])
+                if coords_check is not None:
+                    ship['lon'] = coords_check[0]
+                    ship['lat'] = coords_check[1]
+                    print("Ship faked it's coordinates")
                 ships.append(ship)
                 # Add new ship to all ships list or update the position
                 existing_ship = next((ship for ship in all_ships if ship["mmsi"] == msg.mmsi), None)
@@ -90,7 +95,7 @@ def get_closest_ship(image, ships_near_oil):
             if random.randint(0, 9) < 10:
                 closest_ship, _ = calculate_closest_ship(ships, oil_centers)
                 ships.remove(closest_ship) # Hides oil spiller
-
+            
             closest_current_ship, current_diff = calculate_closest_ship(ships, oil_centers)
             if old_oil_spill is not None:
                 num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(old_oil_spill, connectivity=8)
@@ -132,6 +137,6 @@ for file_path in sorted(glob.glob(os.path.join(images_dir, "*.png"))):
 
 if ships_near_oil:
     top_ship = max(ships_near_oil, key=lambda s: s["proximity_count"])
-    print(f"Ship with highest proximity count: {top_ship['mmsi']} ({top_ship['proximity_count']})")
+    print(f"Ship with highest proximity count: {top_ship['mmsi']} ({top_ship['proximity_count']}), at lon: {top_ship['lon']} lat: {top_ship['lat']}")
 
-print(ships_near_oil)
+# print(ships_near_oil)
