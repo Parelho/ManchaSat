@@ -14,3 +14,4 @@ grayscale_frames
 libdevice.10.bc
 python/__pycache__
 *.jpg
+*.tflite
