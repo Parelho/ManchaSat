@@ -157,7 +157,12 @@ def get_closest_ship_from_data(frame, pred_mask, ships_near_oil):
                 spiller_is_hidden = True
                 old_oil_spill = new_spill_mask
 
-        return closest_ship, spiller_is_hidden
+        oil_pixels = np.sum(pred_mask == 3)
+
+        oil_mask_vis = (pred_mask == 3).astype(np.uint8) * 255
+        cv2.imwrite("/home/vinicius/Desktop/cubesat/ManchaSat/oil_mask_latest.jpg", oil_mask_vis)
+
+        return closest_ship, spiller_is_hidden, oil_pixels
     else:
         return None, False
 
@@ -191,7 +196,8 @@ for i in range(0, len(image_paths), batch_size):
     for idx, path in enumerate(batch_paths):
         frame = cv2.imread(path)
         pred_mask = ip.decode_mask(preds[idx:idx+1], frame.shape)
-        closest_ship, spiller_is_hidden = get_closest_ship_from_data(frame, pred_mask, ships_near_oil)
+        closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship_from_data(frame, pred_mask, ships_near_oil)
+        print(f"oil pixels: {oil_pixels}")
 
         if closest_ship is not None:
             existing_ship = next((ship for ship in ships_near_oil if ship["mmsi"] == closest_ship["mmsi"]), None)

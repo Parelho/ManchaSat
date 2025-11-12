@@ -17,3 +17,15 @@ Find libdevice on your env and copy it into the jupyter folder in the project ro
 ```bash
 find $CONDA_PREFIX -name libdevice.10.bc
 ```
+
+# How to compile code
+```bash
+pip install pyinstaller
+```
+```bash
+pyinstaller --onefile file.py
+```
+the build folder is not needed to run the compiled binary, just run the actual binary with:
+```bash
+./file
+```

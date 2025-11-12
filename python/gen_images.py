@@ -3,7 +3,7 @@ import os
 import shutil
 
 # Load video
-cap = cv2.VideoCapture("video/ManchaSat_compressed.mp4")
+cap = cv2.VideoCapture("video/ManchaSat.mp4")
 if not cap.isOpened():
     raise ValueError("Error opening video file")
 else:
