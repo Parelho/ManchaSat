@@ -1,42 +1,53 @@
 import cv2
 import numpy as np
-import os
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3" # remove tensorflow warnings
-import tensorflow as tf
-from image_processing import ImageProcessing as ip
-from resolution import Resolution as rs
 
-model = tf.keras.models.load_model("jupyter/segmentation_unet.h5", compile=False)
+class CalcSpillArea:
+    def __init__(self, crop_offsets=(75, 45, 20, 100)):
+        """
+        crop_offsets: (left, right, top, bottom)
+        """
+        self.crop_offsets = crop_offsets
 
-# ---------- IMAGE AREA ----------
+    def crop_center(self, frame):
+        """Crop the image based on offsets (left, right, top, bottom)."""
+        h, w, _ = frame.shape
+        left, right, top, bottom = self.crop_offsets
+        return frame[top:h - bottom, left:w - right]
 
-img_path = "grayscale_frames/frame_1200.png"
-frame = cv2.imread(img_path)
-if frame is None:
-    raise FileNotFoundError(f"Image not found: {img_path}")
+    def analyze(self, frame, oil_pixels, save_resized_path="resized_input.jpg"):
+        """
+        Takes the original frame and total oil_pixels (from detection),
+        crops and resizes the image, and returns area estimations.
 
-input_tensor = ip.preprocess_frame(frame)
-pred = model.predict(input_tensor, verbose=0)
-pred_mask = ip.decode_mask(pred, frame.shape)
+        Returns a dict with:
+        - oil_pixels
+        - total_pixels
+        - oil_percentage
+        - estimated_area_km2
+        """
+        # Crop and resize
+        cropped = self.crop_center(frame)
+        resized_cropped = cv2.resize(cropped, (1920, 1080))
+        cv2.imwrite(save_resized_path, resized_cropped)
 
-oil_pixels = np.sum(pred_mask == 3)
-total_pixels = pred_mask.size
-percentage = (oil_pixels / total_pixels)
+        total_pixels = cropped.shape[0] * cropped.shape[1]
+        percentage = oil_pixels / total_pixels
 
-# ---------- SPILL AREA ----------
+        # --- Area estimation ---
+        lat_pixels_per_degree = 1080 / 180
+        lon_pixels_per_degree = 1920 / 360
+        km_per_degree_lat = 111  # average ~111 km per degree latitude
+        km_per_degree_lon = 111
 
-distance = 430 # in km
-fov_horizontal = 65
-fov_vertical = 48
+        km_per_pixel_lat = km_per_degree_lat / lat_pixels_per_degree
+        km_per_pixel_lon = km_per_degree_lon / lon_pixels_per_degree
+        km_per_pixel = (km_per_pixel_lat + km_per_pixel_lon) / 2
 
-horizontal_resolution, vertical_resolution = rs.get_resolution(distance, fov_horizontal, fov_vertical)
-horizontal_resolution = horizontal_resolution / 256 # km/px
-vertical_resolution = vertical_resolution / 256 # km/px
+        area_km2 = oil_pixels * (km_per_pixel ** 2)
 
-print(f"horizontal resolution: {horizontal_resolution:.2f} km/px\nvertical resolution: {vertical_resolution:.2f} km/px")
-
-pixel_area = horizontal_resolution * vertical_resolution # km^2 per pixel
-
-spill_area = oil_pixels * pixel_area # km^2 of oil spill
-
-print(f"Oil spill area: {spill_area:.2f} km^2 ({percentage*100:.2f}%)")
+        return {
+            "oil_pixels": int(oil_pixels),
+            "total_pixels": int(total_pixels),
+            "oil_percentage": float(percentage),
+            "estimated_area_km2": float(area_km2)
+        }
