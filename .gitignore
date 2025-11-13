@@ -16,3 +16,4 @@ python/__pycache__
 *.jpg
 *.tflite
 *.png
+*.txt

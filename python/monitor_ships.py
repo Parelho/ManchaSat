@@ -204,15 +204,15 @@ def get_closest_ship(image, ships_near_oil):
 ships_near_oil = []
 # img_count = 200
 
-try:
-    while True:
-        print("new image")
-        # closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(f"/home/mauasat/CPP/rasp/grayscale_frames/frame_0{img_count}.png", ships_near_oil)
+while True:
+    try:
+        # closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(f"grayscale_frames/frame_0{img_count}.png", ships_near_oil)
         closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(f"image.jpg", ships_near_oil)
         # img_count += 1
-        print(f"Oil pixels: {oil_pixels}")
 
         if closest_ship is not None:
+            print(f"Oil pixels: {oil_pixels}")
+
             existing_ship = next((ship for ship in ships_near_oil if ship["mmsi"] == closest_ship["mmsi"]), None)
             if existing_ship is None:
                 closest_ship["proximity_count"] = 1
@@ -222,9 +222,15 @@ try:
                 existing_ship["proximity_count"] += 1
                 # print("The spilling ship is hiding it's AIS signal\n")
 
-except KeyboardInterrupt:
-    if ships_near_oil:
-        top_ship = max(ships_near_oil, key=lambda s: s["proximity_count"])
-        print(f"Ship with highest proximity count: {top_ship['mmsi']} ({top_ship['proximity_count']}), at lon: {top_ship['lon']} lat: {top_ship['lat']}")
+            top_ship = max(ships_near_oil, key=lambda s: s["proximity_count"])
+            with open("output.txt", "w") as f:
+                output = f"A{int(oil_pixels['estimated_area_km2'])},mmsi{top_ship['mmsi']}"
+                f.write(output)
 
-    print(ships_near_oil)
+    except Exception as e:
+        print(f"Error: {e}")
+        # if ships_near_oil:
+        #     top_ship = max(ships_near_oil, key=lambda s: s["proximity_count"])
+        #     print(f"Ship with highest proximity count: {top_ship['mmsi']} ({top_ship['proximity_count']}), at lon: {top_ship['lon']} lat: {top_ship['lat']}")
+
+        # print(ships_near_oil)
