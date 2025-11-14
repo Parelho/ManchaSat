@@ -201,3 +201,36 @@ class AIS:
             return [lon_camera, lat_camera]
         
         return None
+    
+    def check_ais_lat_lon(centers, ship):
+        # cutoffs = (top, bottom, left, right)
+        cutoffs = (19, 850, 77, 1875)
+
+        LON_MIN, LON_MAX = -90, 90
+        LAT_MIN, LAT_MAX = -180, 180
+
+        # Image region after applying cutoffs
+        top, bottom, left, right = cutoffs
+        width_px = right - left
+        height_px = bottom - top
+
+        lon = float(ship["lon"])
+        lat = float(ship["lat"])
+
+        # Convert lon/lat to pixel coordinates
+        lon_px = int(left + (lon - LON_MIN) / (LON_MAX - LON_MIN) * width_px)
+        lat_px = int(bottom - (lat - LAT_MIN) / (LAT_MAX - LAT_MIN) * height_px)
+
+        # --- find the closest centroid to this pixel point ---
+        closest_cx, closest_cy = min(
+            centers,
+            key=lambda c: (c[0] - lon_px) ** 2 + (c[1] - lat_px) ** 2
+        )
+
+        # Update ship dict
+        ship["lon_px"] = lon_px
+        ship["lat_px"] = lat_px
+        ship["closest_cx"] = int(closest_cx)
+        ship["closest_cy"] = int(closest_cy)
+
+        return ship

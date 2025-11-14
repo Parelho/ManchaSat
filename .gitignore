@@ -17,3 +17,4 @@ python/__pycache__
 *.tflite
 *.png
 *.txt
+*.csv
