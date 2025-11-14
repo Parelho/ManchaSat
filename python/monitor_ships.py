@@ -126,138 +126,30 @@ def get_closest_ship(image, ships_near_oil):
                 "lon_px": 0,
                 "lat_px": 0
             }
-            ship = AIS.check_ais_lat_lon(centers, ship)
-
             ships.append(ship)
 
-        for ship_ais in ships:
-            coords_check = AIS.check_coordinates(ship_ais, [0,0], [1920,1080])
-            if coords_check is not None:
-                ship['lon'] = coords_check[0]
-                ship['lat'] = coords_check[1]
-                print("Ship faked it's coordinates")
-            
-            # Add new ship to all ships list or update the position
-            existing_ship = next((ship for ship in all_ships if ship["mmsi"] == ship_ais["mmsi"]), None)
+        ships = AIS.lat_lon_to_px(centers, ships)
+
+        for new_ship in ships:
+            existing_ship = next((ship for ship in all_ships if ship["mmsi"] == new_ship["mmsi"]), None)
             if existing_ship is None:
                 all_ships.append(ship)
-            else:
-                existing_ship.update(ship)
+                # print("appended to all ships")
+        # print(ships)
+        # print(oil_centers)
 
         closest_ship = None
+        closest_ship_difference = 9999999
         spiller_is_hidden = False
-        if ships and oil_centers:
-            if len(ships) < len(centers):  # Some ships are hidden
-                print("A ship was hidden")
 
-                match_threshold_px = 30   # to match existing AIS ships to detected centers
-                all_ships_threshold_px = 60  # to match missing centers to previously seen ships
+        for ship in ships:
+            difference_spill_lon = abs(oil_centers[0][0] - ship["lon_px"])
+            difference_spill_lat = abs(oil_centers[0][1] - ship["lat_px"])
+            difference = difference_spill_lon + difference_spill_lat
 
-                # 1) Remove centers that are already accounted for by current 'ships'
-                available_centers = list(centers)  # shallow copy
-                for ship in list(ships):
-                    if not available_centers:
-                        break
-                    # compute distances from this ship to every available center
-                    dists = [np.hypot(c[0] - ship["lon_px"], c[1] - ship["lat_px"]) for c in available_centers]
-                    min_idx = int(np.argmin(dists))
-                    if dists[min_idx] < match_threshold_px:
-                        # this center is accounted for by the AIS-reporting ship
-                        available_centers.pop(min_idx)
-
-                # remaining centers are missing (no AIS for them)
-                missing_centers = available_centers
-
-                # 2) Try to recover each missing center by matching to all_ships (previously seen ships)
-                for center in missing_centers:
-                    # build candidate list from all_ships excluding ships already present in 'ships' (by mmsi)
-                    present_mmsi = {s["mmsi"] for s in ships}
-                    candidates = [s for s in all_ships if s["mmsi"] not in present_mmsi]
-
-                    if not candidates:
-                        print(f"No candidates in all_ships to match missing center {center}")
-                        continue
-
-                    dists = [np.hypot(center[0] - c["lon_px"], center[1] - c["lat_px"]) for c in candidates]
-                    min_idx = int(np.argmin(dists))
-                    best_dist = dists[min_idx]
-                    best_ship = candidates[min_idx]
-
-                    if best_dist < all_ships_threshold_px:
-                        # create recovered ship entry and update pixel coordinates to the detected center
-                        missing_ship = best_ship.copy()
-                        missing_ship["lon_px"] = int(center[0])
-                        missing_ship["lat_px"] = int(center[1])
-
-                        # try to refresh geographic coords if your helper returns something useful
-                        coords_check = AIS.check_coordinates(missing_ship, [0,0], [256,256])
-                        if coords_check is not None:
-                            missing_ship["lon"] = coords_check[0]
-                            missing_ship["lat"] = coords_check[1]
-
-                        # update the stored all_ships entry
-                        for i, aship in enumerate(all_ships):
-                            if aship["mmsi"] == missing_ship["mmsi"]:
-                                all_ships[i].update(missing_ship)
-                                break
-
-                        # add the recovered ship to the current 'ships' list so it participates in later logic
-                        ships.append(missing_ship)
-                        print(f"Recovered hidden ship {missing_ship['mmsi']} -> center {center} (px dist {best_dist:.1f})")
-                    else:
-                        # no close previous ship found
-                        print(f"No match in all_ships for center {center} (closest dist {best_dist:.1f})")
-
-            overlapping_ships = []
-            for i, ship in enumerate(ships):
-                if i < len(bboxes):
-                    if check_overlap((pred_mask == 3).astype(np.uint8) * 255, bboxes[i]):
-                        overlapping_ships.append(ship)
-
-            if overlapping_ships:
-                # If multiple overlaps, choose the one with largest overlap area
-                overlap_areas = []
-                oil_mask_uint8 = (pred_mask == 3).astype(np.uint8) * 255
-                for i, ship in enumerate(overlapping_ships):
-                    x, y, w, h = bboxes[i]
-                    ship_mask = np.zeros_like(oil_mask_uint8, dtype=np.uint8)
-                    cv2.rectangle(ship_mask, (x, y), (x + w, y + h), 255, -1)
-                    overlap = cv2.bitwise_and(oil_mask_uint8, ship_mask)
-                    overlap_areas.append(np.count_nonzero(overlap))
-                max_idx = int(np.argmax(overlap_areas))
-                closest_ship = overlapping_ships[max_idx]
-                spiller_is_hidden = False
-            else:
-                # ---------- FALLBACK TO CENTROID DISTANCE ----------
-                closest_current_ship = 0
-                current_diff = 0
-                if new_oil_center:
-                    closest_current_ship, current_diff = calculate_closest_ship(ships, [new_oil_center])
-                else:
-                    closest_current_ship, current_diff = calculate_closest_ship(ships, oil_centers)
-                if old_oil_spill is not None:
-                    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(old_oil_spill, connectivity=8)
-                    if len(centroids) > 1:
-                        old_oil_center = (int(centroids[1][0]), int(centroids[1][1]))
-                        closest_old_ship, old_diff = calculate_closest_ship(all_ships, [old_oil_center])
-                    else:
-                        closest_old_ship, old_diff = calculate_closest_ship(all_ships, oil_centers)
-                else:
-                    closest_old_ship, old_diff = calculate_closest_ship(all_ships, oil_centers)
-
-                if current_diff < old_diff:
-                    closest_ship = closest_current_ship
-                else:
-                    closest_ship = closest_old_ship
-                    spiller_is_hidden = True
-                    old_oil_spill = new_spill_mask
-
-                if current_diff < old_diff:
-                    closest_ship = closest_current_ship
-                else:
-                    closest_ship = closest_old_ship
-                    spiller_is_hidden = True
-                    old_oil_spill = new_spill_mask
+            if (difference < closest_ship_difference):
+                closest_ship = ship
+                closest_ship_difference = difference
 
         oil_pixels = np.sum(pred_mask == 3)
 
@@ -309,7 +201,7 @@ ships_near_oil = []
 for i in range(1):
     try:
         # closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(f"grayscale_frames/frame_0{img_count}.png", ships_near_oil)
-        closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(f"grayscale_frames/frame_3000.png", ships_near_oil)
+        closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(f"image.jpg", ships_near_oil)
         # img_count += 1
         output = ""
 

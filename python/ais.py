@@ -202,35 +202,32 @@ class AIS:
         
         return None
     
-    def check_ais_lat_lon(centers, ship):
-        # cutoffs = (top, bottom, left, right)
-        cutoffs = (19, 850, 77, 1875)
+    def lat_lon_to_px(centers, ships):
+        pxs_per_lon = 5
+        pxs_per_lat = 4.91
+        # print(centers)
 
-        LON_MIN, LON_MAX = -90, 90
-        LAT_MIN, LAT_MAX = -180, 180
+        for ship in ships:
+            # if ship["mmsi"] == "990049243":
+                closest_center = [-1,-1] # lon in px, lat in px
+                closest_difference = 999999 # total difference from lat and lon
 
-        # Image region after applying cutoffs
-        top, bottom, left, right = cutoffs
-        width_px = right - left
-        height_px = bottom - top
+                # Adjustment to reconvert lon and lat to their value in pixels
+                lon_adjusted = lon_adjusted = ship["lon"] * pxs_per_lon + 976.5
+                lat_adjusted = 459.5 - ship["lat"] * pxs_per_lat
+                # print(f"lon_adjusted: {lon_adjusted} lat_adjusted: {lat_adjusted}\n")
 
-        lon = float(ship["lon"])
-        lat = float(ship["lat"])
+                for center in centers:
+                    difference_lon = abs(center[0] - lon_adjusted)
+                    difference_lat = abs(center[1] - lat_adjusted)
+                    new_closest_difference = difference_lon + difference_lat
+                    # print(f"difference_lon = {difference_lon}, difference_lat = {difference_lat}, new_closest_difference = {new_closest_difference}\n")
 
-        # Convert lon/lat to pixel coordinates
-        lon_px = int(left + (lon - LON_MIN) / (LON_MAX - LON_MIN) * width_px)
-        lat_px = int(bottom - (lat - LAT_MIN) / (LAT_MAX - LAT_MIN) * height_px)
+                    if (new_closest_difference < closest_difference):
+                        closest_difference = new_closest_difference
+                        closest_center = center
+                
+                ship["lon_px"] = closest_center[0]
+                ship["lat_px"] = closest_center[1]
 
-        # --- find the closest centroid to this pixel point ---
-        closest_cx, closest_cy = min(
-            centers,
-            key=lambda c: (c[0] - lon_px) ** 2 + (c[1] - lat_px) ** 2
-        )
-
-        # Update ship dict
-        ship["lon_px"] = lon_px
-        ship["lat_px"] = lat_px
-        ship["closest_cx"] = int(closest_cx)
-        ship["closest_cy"] = int(closest_cy)
-
-        return ship
+        return ships
