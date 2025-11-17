@@ -28,7 +28,7 @@ class CalcSpillArea:
         # Crop and resize
         cropped = self.crop_center(frame)
         resized_cropped = cv2.resize(cropped, (1920, 1080))
-        cv2.imwrite(save_resized_path, resized_cropped)
+        # cv2.imwrite(save_resized_path, resized_cropped)
 
         total_pixels = cropped.shape[0] * cropped.shape[1]
         percentage = oil_pixels / total_pixels

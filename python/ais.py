@@ -2,6 +2,7 @@ import pyais
 import random
 import math
 from resolution import Resolution as rs
+import csv
 
 class AIS:
     tracked_ships = {}  # MMSI -> last known pixel coordinates
@@ -231,3 +232,23 @@ class AIS:
                 ship["lat_px"] = closest_center[1]
 
         return ships
+    
+    def load_ais_csv(path):
+        with open(path, "r") as f:
+            r = csv.reader(f)
+            next(r, None)
+            return [row for row in r]
+
+    def reduce_ais_to_csv(rows, output_path="input.csv"):
+        if len(rows) <= 1:
+            reduced = rows
+        else:
+            keep_count = max(1, len(rows) // 6)
+            reduced = random.sample(rows, keep_count)
+
+        with open(output_path, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["mmsi", "lon", "lat"])
+            w.writerows(reduced)
+
+        return output_path

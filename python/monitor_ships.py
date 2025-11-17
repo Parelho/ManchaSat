@@ -146,8 +146,11 @@ for image_index, image in enumerate(images):
     if image_index % 20 != 0:
         continue
     try:
+        ais_rows = AIS.load_ais_csv(inputs[image_index])
+        reduced_ais = AIS.reduce_ais_to_csv(ais_rows)
+
         # closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(f"grayscale_frames/frame_0{img_count}.png", ships_near_oil)
-        closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(image, inputs[image_index],ships_near_oil)
+        closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(image, "input.csv",ships_near_oil)
         # img_count += 1
         output = ""
 
