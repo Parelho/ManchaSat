@@ -203,35 +203,14 @@ class AIS:
         
         return None
     
-    def lat_lon_to_px(centers, ships):
+    def lat_lon_to_px(lon, lat):
         pxs_per_lon = 5
         pxs_per_lat = 4.91
-        # print(centers)
 
-        for ship in ships:
-            # if ship["mmsi"] == "990049243":
-                closest_center = [-1,-1] # lon in px, lat in px
-                closest_difference = 999999 # total difference from lat and lon
+        lon_adjusted = lon * pxs_per_lon + 976.5
+        lat_adjusted = 459.5 - lat * pxs_per_lat
 
-                # Adjustment to reconvert lon and lat to their value in pixels
-                lon_adjusted = ship["lon"] * pxs_per_lon + 976.5
-                lat_adjusted = 459.5 - ship["lat"] * pxs_per_lat
-                # print(f"lon_adjusted: {lon_adjusted} lat_adjusted: {lat_adjusted}\n")
-
-                for center in centers:
-                    difference_lon = abs(center[0] - lon_adjusted)
-                    difference_lat = abs(center[1] - lat_adjusted)
-                    new_closest_difference = difference_lon + difference_lat
-                    # print(f"difference_lon = {difference_lon}, difference_lat = {difference_lat}, new_closest_difference = {new_closest_difference}\n")
-
-                    if (new_closest_difference < closest_difference):
-                        closest_difference = new_closest_difference
-                        closest_center = center
-                
-                ship["lon_px"] = closest_center[0]
-                ship["lat_px"] = closest_center[1]
-
-        return ships
+        return lon_adjusted, lat_adjusted
     
     def load_ais_csv(path):
         with open(path, "r") as f:
@@ -240,15 +219,20 @@ class AIS:
             return [row for row in r]
 
     def reduce_ais_to_csv(rows, output_path="input.csv"):
-        if len(rows) <= 1:
-            reduced = rows
-        else:
-            keep_count = max(1, len(rows) // 6)
-            reduced = random.sample(rows, keep_count)
+        if not rows:
+            return output_path
+
+        rows_copy = rows.copy()
+
+        hide_count = random.randint(0, 6)
+        hide_count = min(hide_count, len(rows_copy))
+        rows_reduced = rows_copy[:]
+        for _ in range(hide_count):
+            rows_reduced.pop(random.randrange(len(rows_reduced)))
 
         with open(output_path, "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["mmsi", "lon", "lat"])
-            w.writerows(reduced)
+            w.writerows(rows_reduced)
 
         return output_path

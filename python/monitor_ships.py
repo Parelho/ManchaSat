@@ -80,6 +80,17 @@ def get_closest_ship(image, input, ships_near_oil):
         oil_present = False
 
     if centers:
+        ships = []
+        for center in centers:
+            ship = {
+                "mmsi": 0,
+                "lon": 0,
+                "lat": 0,
+                "lon_px": center[0],
+                "lat_px": center[1]
+            }
+            ships.append(ship)
+
         csv_reader = []
         rows = []
         with open(input, mode="r", newline="") as f:
@@ -87,18 +98,38 @@ def get_closest_ship(image, input, ships_near_oil):
             next(csv_reader, None)  # skip header
             rows = list(csv_reader)  # store all rows in memory
 
-        ships = []
         for row in rows:
-            ship = {
-                "mmsi": row[0],
-                "lon": float(row[1]),
-                "lat": float(row[2]),
-                "lon_px": 0,
-                "lat_px": 0
-            }
-            ships.append(ship)
+            closest_ship_to_row = None
+            difference = 999999
+            for ship in ships:
+                lon_adjusted, lat_adjusted = AIS.lat_lon_to_px(float(row[1]), float(row[2]))
 
-        ships = AIS.lat_lon_to_px(centers, ships)
+                new_difference = abs(ship["lon_px"] - lon_adjusted) + abs(ship["lat_px"] - lat_adjusted)
+                if new_difference < difference:
+                    closest_ship_to_row = ship
+            
+            for ship in ships:
+                if ship["lon_px"] == closest_ship_to_row["lon_px"] and ship ["lat_px"] == closest_ship_to_row["lat_px"]:
+                    ship["lon"] = float(row[1])
+                    ship["lat"] = float(row[2])
+        
+        # try to update ships with no AIS in current input
+        for ship in ships:
+            if ship["mmsi"] == 0:
+                closest_ship_without_ais = None
+                difference = 999999
+                for all_ship in all_ships:
+                    if all_ship["mmsi"] in ships:
+                        continue # skips ship if it already had it's AIS in input
+                    else:
+                        new_difference = abs(ship["lon_px"] - all_ship["lon_px"]) + abs(ship["lat_px"] - all_ship["lat_px"])
+                        if new_difference < difference:
+                            closest_ship_without_ais = all_ship
+                
+                if closest_ship_without_ais is not None:
+                    ship["mmsi"] = closest_ship_without_ais["mmsi"]
+                    ship["lon"] = closest_ship_without_ais["lon"]
+                    ship["lat"] = closest_ship_without_ais["lat"]
 
         for new_ship in ships:
             existing_ship = next((ship for ship in all_ships if ship["mmsi"] == new_ship["mmsi"]), None)
@@ -143,8 +174,6 @@ images = sorted(glob.glob("grayscale_frames/*.png"))
 inputs = sorted(glob.glob("inputs/*.csv"))
 
 for image_index, image in enumerate(images):
-    if image_index % 20 != 0:
-        continue
     try:
         ais_rows = AIS.load_ais_csv(inputs[image_index])
         reduced_ais = AIS.reduce_ais_to_csv(ais_rows)
@@ -171,11 +200,11 @@ for image_index, image in enumerate(images):
                 existing_ship["lat"] = closest_ship["lat"]
                 # print("The spilling ship is hiding it's AIS signal\n")
 
-            # img = cv2.imread(image)
-            # lat_px = int(closest_ship["lat_px"])
-            # lon_px = int(closest_ship["lon_px"])
-            # cv2.circle(img, (lon_px, lat_px), 8, (0, 0, 255), -1)
-            # cv2.imwrite(f"marked_frames/frame_{image_index}.png", img)
+            img = cv2.imread(image)
+            lat_px = int(closest_ship["lat_px"])
+            lon_px = int(closest_ship["lon_px"])
+            cv2.circle(img, (lon_px, lat_px), 8, (0, 0, 255), -1)
+            cv2.imshow("Live Feed", img)
 
             top_ship = max(ships_near_oil, key=lambda s: s["proximity_count"])
             output = f"A{int(oil_pixels['estimated_area_km2'])},mmsi{top_ship['mmsi']}"
@@ -188,6 +217,9 @@ for image_index, image in enumerate(images):
             with open("output.txt", "w") as f:
                     f.write(output)
 
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
     except Exception as e:
         print(f"Error: {e}")
         traceback.print_exc()
@@ -197,3 +229,5 @@ if ships_near_oil:
     print(f"Ship with highest proximity count is mmsi: {top_ship['mmsi']} with proximity_count: {top_ship['proximity_count']}, at lon: {top_ship['lon']} lat: {top_ship['lat']}")
 
 print(ships_near_oil)
+
+cv2.destroyAllWindows()
