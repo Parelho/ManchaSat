@@ -127,9 +127,16 @@ def get_closest_ship(image, input, ships_near_oil):
                             closest_ship_without_ais = all_ship
                 
                 if closest_ship_without_ais is not None:
+                    lon_adjusted = (ship["lon_px"] - 976.5) / 5
+                    lat_adjusted = (459.5 - ship["lat_px"]) / 4.91
                     ship["mmsi"] = closest_ship_without_ais["mmsi"]
-                    ship["lon"] = closest_ship_without_ais["lon"]
-                    ship["lat"] = closest_ship_without_ais["lat"]
+                    ship["lon"] = lon_adjusted
+                    ship["lat"] = round(lat_adjusted, 1)
+
+                    for all_ship in all_ships:
+                        if closest_ship_without_ais["mmsi"] == all_ship["mmsi"]:
+                            all_ship["lon"] = lon_adjusted
+                            all_ship["lat"] = round(lat_adjusted, 1)
 
         for new_ship in ships:
             existing_ship = next((ship for ship in all_ships if ship["mmsi"] == new_ship["mmsi"]), None)
@@ -174,6 +181,8 @@ images = sorted(glob.glob("grayscale_frames/*.png"))
 inputs = sorted(glob.glob("inputs/*.csv"))
 
 for image_index, image in enumerate(images):
+    if image_index % 20 != 0:
+        continue
     try:
         ais_rows = AIS.load_ais_csv(inputs[image_index])
         reduced_ais = AIS.reduce_ais_to_csv(ais_rows)
@@ -200,11 +209,11 @@ for image_index, image in enumerate(images):
                 existing_ship["lat"] = closest_ship["lat"]
                 # print("The spilling ship is hiding it's AIS signal\n")
 
-            img = cv2.imread(image)
-            lat_px = int(closest_ship["lat_px"])
-            lon_px = int(closest_ship["lon_px"])
-            cv2.circle(img, (lon_px, lat_px), 8, (0, 0, 255), -1)
-            cv2.imshow("Live Feed", img)
+            # img = cv2.imread(image)
+            # lat_px = int(closest_ship["lat_px"])
+            # lon_px = int(closest_ship["lon_px"])
+            # cv2.circle(img, (lon_px, lat_px), 8, (0, 0, 255), -1)
+            # cv2.imshow("Live Feed", img)
 
             top_ship = max(ships_near_oil, key=lambda s: s["proximity_count"])
             output = f"A{int(oil_pixels['estimated_area_km2'])},mmsi{top_ship['mmsi']}"
@@ -230,4 +239,4 @@ if ships_near_oil:
 
 print(ships_near_oil)
 
-cv2.destroyAllWindows()
+# cv2.destroyAllWindows()
