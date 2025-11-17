@@ -213,7 +213,7 @@ class AIS:
                 closest_difference = 999999 # total difference from lat and lon
 
                 # Adjustment to reconvert lon and lat to their value in pixels
-                lon_adjusted = lon_adjusted = ship["lon"] * pxs_per_lon + 976.5
+                lon_adjusted = ship["lon"] * pxs_per_lon + 976.5
                 lat_adjusted = 459.5 - ship["lat"] * pxs_per_lat
                 # print(f"lon_adjusted: {lon_adjusted} lat_adjusted: {lat_adjusted}\n")
 
