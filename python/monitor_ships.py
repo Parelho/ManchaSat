@@ -41,6 +41,8 @@ def get_new_spill_mask(pred_mask):
     return new_spill
 
 def get_closest_ship(image, input, ships_near_oil):
+    global oil_present
+
     # ---------- IMAGE ----------
     frame = cv2.imread(image)
     if frame is None:
@@ -71,13 +73,10 @@ def get_closest_ship(image, input, ships_near_oil):
             # Use centroid of the largest new oil region
             largest_idx = np.argmax(stats_new[1:, cv2.CC_STAT_AREA]) + 1
             new_oil_center = (int(centroids_new[largest_idx][0]), int(centroids_new[largest_idx][1]))
-            oil_present = True
         else:
             new_oil_center = None
-            oil_present = False
     else:
         new_oil_center = None
-        oil_present = False
 
     if centers:
         ships = []
@@ -99,6 +98,7 @@ def get_closest_ship(image, input, ships_near_oil):
             rows = list(csv_reader)  # store all rows in memory
 
         for row in rows:
+            mmsi = int(row[0])
             closest_ship_to_row = None
             difference = 999999
             for ship in ships:
@@ -107,9 +107,11 @@ def get_closest_ship(image, input, ships_near_oil):
                 new_difference = abs(ship["lon_px"] - lon_adjusted) + abs(ship["lat_px"] - lat_adjusted)
                 if new_difference < difference:
                     closest_ship_to_row = ship
+                    difference = new_difference
             
             for ship in ships:
                 if ship["lon_px"] == closest_ship_to_row["lon_px"] and ship ["lat_px"] == closest_ship_to_row["lat_px"]:
+                    ship["mmsi"] = mmsi
                     ship["lon"] = float(row[1])
                     ship["lat"] = float(row[2])
         
@@ -152,6 +154,8 @@ def get_closest_ship(image, input, ships_near_oil):
 
         if not oil_centers:
             return None, False, {"estimated_area_km2": 0}
+        else:
+            oil_present = True
 
         spill_x, spill_y = oil_centers[0]
 
@@ -166,7 +170,7 @@ def get_closest_ship(image, input, ships_near_oil):
 
         result = analyzer.analyze(frame, oil_pixels)
 
-        # oil_mask_vis = (pred_mask == 1).astype(np.uint8) * 255
+        # oil_mask_vis = (pred_mask == 3).astype(np.uint8) * 255
         # cv2.imwrite("oil_mask_latest.jpg", oil_mask_vis)
 
         return closest_ship, spiller_is_hidden, result
@@ -177,18 +181,13 @@ def get_closest_ship(image, input, ships_near_oil):
 ships_near_oil = []
 # img_count = 200
 
-images = sorted(glob.glob("grayscale_frames/*.png"))
-inputs = sorted(glob.glob("inputs/*.csv"))
+image = "image.jpg"
+input = "input.csv"
 
-for image_index, image in enumerate(images):
-    if image_index % 20 != 0:
-        continue
+while True:
     try:
-        ais_rows = AIS.load_ais_csv(inputs[image_index])
-        reduced_ais = AIS.reduce_ais_to_csv(ais_rows)
-
         # closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(f"grayscale_frames/frame_0{img_count}.png", ships_near_oil)
-        closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(image, "input.csv",ships_near_oil)
+        closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(image, input,ships_near_oil)
         # img_count += 1
         output = ""
 
@@ -216,7 +215,7 @@ for image_index, image in enumerate(images):
             # cv2.imshow("Live Feed", img)
 
             top_ship = max(ships_near_oil, key=lambda s: s["proximity_count"])
-            output = f"A{int(oil_pixels['estimated_area_km2'])},mmsi{top_ship['mmsi']}"
+            output = f"A{int(oil_pixels['estimated_area_km2'])},AP{int(oil_pixels['oil_percentage']*100000)},mmsi{top_ship['mmsi']}"
             with open("output.txt", "w") as f:
                     f.write(output)
 
