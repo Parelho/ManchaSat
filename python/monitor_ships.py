@@ -11,14 +11,26 @@ import time
 import csv
 import traceback
 import sys
+import json
 
-model_path = "model.tflite"
+base_path = "~/Git/ManchaSat"
+base_path = os.path.expanduser(base_path)
+
+model_path = f"{base_path}/model.tflite"
 interpreter = Interpreter(model_path=model_path, num_threads=4)
 interpreter.allocate_tensors()
 
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
-all_ships = [] # Used to track ships that stopped sending AIS
+
+all_ships = None
+if not os.path.exists(f"{base_path}/all_ships.json"):
+    with open(f"{base_path}/all_ships.json", "w") as f:
+        json.dump({"all_ships": []}, f)
+
+with open(f"{base_path}/all_ships.json", "r+") as all_ships_file:
+    data = json.load(all_ships_file) # Used to track ships that stopped sending AIS
+    all_ships = data["all_ships"]
 
 analyzer = CalcSpillArea()
 
@@ -143,10 +155,11 @@ def get_closest_ship(image, input, ships_near_oil):
         for new_ship in ships:
             existing_ship = next((ship for ship in all_ships if ship["mmsi"] == new_ship["mmsi"]), None)
             if existing_ship is None:
-                all_ships.append(ship)
+                all_ships.append(new_ship)
                 # print("appended to all ships")
         # print(ships)
         # print(oil_centers)
+        print(all_ships)
 
         closest_ship = None
         closest_ship_difference = 9999999
@@ -177,60 +190,75 @@ def get_closest_ship(image, input, ships_near_oil):
     else:
         return None, False, 0
 
-# ---------- MAIN LOOP ----------
+# ---------- MAIN LOOP ----------"all_ships.json"
 ships_near_oil = []
 # img_count = 200
 
-image = "image.jpg"
-input = "input.csv"
+image = f"{base_path}/image.jpg"
+input = f"{base_path}/input.csv"
 
-while True:
-    try:
-        # closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(f"grayscale_frames/frame_0{img_count}.png", ships_near_oil)
-        closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(image, input,ships_near_oil)
-        # img_count += 1
-        output = ""
+try:
+    # closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(f"grayscale_frames/frame_0{img_count}.png", ships_near_oil)
+    closest_ship, spiller_is_hidden, oil_pixels = get_closest_ship(image, input,ships_near_oil)
+    # img_count += 1
+    output = ""
 
-        if closest_ship is not None:
-            # print(len(closest_ship))
-            # print(f"Oil pixels: {oil_pixels}")
+    if closest_ship is not None:
+        # print(len(closest_ship))
+        # print(f"Oil pixels: {oil_pixels}")
 
-            existing_ship = next((ship for ship in ships_near_oil if ship["mmsi"] == closest_ship["mmsi"]), None)
-            if existing_ship is None:
-                closest_ship["proximity_count"] = 1
-                ships_near_oil.append(closest_ship)
-                print(f"New ship near oil: {closest_ship}")
-            else:
-                existing_ship["proximity_count"] += 1
-                existing_ship["lat_px"] = closest_ship["lat_px"]
-                existing_ship["lon_px"] = closest_ship["lon_px"]
-                existing_ship["lon"] = closest_ship["lon"]
-                existing_ship["lat"] = closest_ship["lat"]
-                # print("The spilling ship is hiding it's AIS signal\n")
+        existing_ship = next((ship for ship in ships_near_oil if ship["mmsi"] == closest_ship["mmsi"]), None)
+        if existing_ship is None:
+            closest_ship["proximity_count"] = 1
+            ships_near_oil.append(closest_ship)
+            print(f"New ship near oil: {closest_ship}")
+        else:
+            existing_ship["proximity_count"] += 1
+            existing_ship["lat_px"] = closest_ship["lat_px"]
+            existing_ship["lon_px"] = closest_ship["lon_px"]
+            existing_ship["lon"] = closest_ship["lon"]
+            existing_ship["lat"] = closest_ship["lat"]
+            # print("The spilling ship is hiding it's AIS signal\n")
 
-            # img = cv2.imread(image)
-            # lat_px = int(closest_ship["lat_px"])
-            # lon_px = int(closest_ship["lon_px"])
-            # cv2.circle(img, (lon_px, lat_px), 8, (0, 0, 255), -1)
-            # cv2.imshow("Live Feed", img)
+        # img = cv2.imread(image)
+        # lat_px = int(closest_ship["lat_px"])
+        # lon_px = int(closest_ship["lon_px"])
+        # cv2.circle(img, (lon_px, lat_px), 8, (0, 0, 255), -1)
+        # cv2.imshow("Live Feed", img)
 
-            top_ship = max(ships_near_oil, key=lambda s: s["proximity_count"])
-            output = f"A{int(oil_pixels['estimated_area_km2'])},AP{int(oil_pixels['oil_percentage']*100000)},mmsi{top_ship['mmsi']}"
-            with open("output.txt", "w") as f:
-                    f.write(output)
+        top_ship = max(ships_near_oil, key=lambda s: s["proximity_count"])
+        output = f"A{int(oil_pixels['estimated_area_km2'])},AP{int(oil_pixels['oil_percentage']*100000)},mmsi{top_ship['mmsi']}"
+        with open(f"{base_path}/output.txt", "w") as f:
+                f.write(output)
 
-            
-        elif not oil_present:
-            output = "A0,mmsi0"
-            with open("output.txt", "w") as f:
-                    f.write(output)
+        
+    elif not oil_present:
+        output = "A0,mmsi0"
+        with open(f"{base_path}/output.txt", "w") as f:
+                f.write(output)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+    #if cv2.waitKey(1) & 0xFF == ord('q'):
+            #break
 
-    except Exception as e:
-        print(f"Error: {e}")
-        traceback.print_exc()
+except Exception as e:
+    print(f"Error: {e}")
+    traceback.print_exc()
+
+with open(f"{base_path}/all_ships.json", "r+") as all_ships_file:
+    data = json.load(all_ships_file)
+
+    # dedupe list of dicts by mmsi
+    unique = {}
+    for ship in all_ships:
+        unique[ship["mmsi"]] = ship
+
+    all_ships = list(unique.values())
+
+    data["all_ships"] = all_ships
+
+    all_ships_file.seek(0)
+    json.dump(data, all_ships_file)
+    all_ships_file.truncate()
 
 if ships_near_oil:
     top_ship = max(ships_near_oil, key=lambda s: s["proximity_count"])
